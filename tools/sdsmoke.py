@@ -92,7 +92,8 @@ def tap(pred, what, tries=10):
     return False
 
 
-def wait_text(pred, what, seconds):
+def wait_text(pred, what, seconds, scroll=False):
+    """Waits for a text on the screen; with scroll, also looks further down (the Downloads list)."""
     end = time.time() + seconds
     last = []
     while time.time() < end:
@@ -101,13 +102,23 @@ def wait_text(pred, what, seconds):
         for t in last:
             if pred(t):
                 return t
+        if scroll:
+            swipe(up=True)
+            swipe(up=True)
+            r = dump()
+            last = [t for t in texts(r) if t]
+            for t in last:
+                if pred(t):
+                    return t
+            for _ in range(4):
+                swipe(up=False)
         time.sleep(3)
     print("TIMEOUT waiting for %s; screen had: %s" % (what, last[:40]))
     return None
 
 
 def files():
-    return adb("shell", "ls", "-l", "/sdcard/Download/Smart Downloader/")
+    return adb("shell", "ls -l '/sdcard/Download/Smart Downloader/'")
 
 
 def share(url):
@@ -140,7 +151,7 @@ def main():
         return
     tap(lambda n: n.get("text") == "Video" and n.get("class", "").endswith("RadioButton"), "the Video choice")
     tap(lambda n: n.get("text") == "Download" and n.get("class", "").endswith("Button"), "the Download button")
-    t = wait_text(lambda s: s.startswith("Saved: clip") or s.startswith("Failed."), "the video to be saved", 300)
+    t = wait_text(lambda s: s.startswith("Saved: clip") or s.startswith("Failed."), "the video to be saved", 300, scroll=True)
     shot("video-saved")
     ls = files()
     print("Download/Smart Downloader:\n" + ls)
@@ -153,7 +164,7 @@ def main():
     tap(lambda n: n.get("text") == "Audio" and n.get("class", "").endswith("RadioButton"), "the Audio choice")
     tap(lambda n: n.get("text", "").startswith("MP3 audio, 192 kbps"), "MP3 192 kbps")
     tap(lambda n: n.get("text") == "Download" and n.get("class", "").endswith("Button"), "the Download button (audio)")
-    t = wait_text(lambda s: s.startswith("Saved: clip.mp3") or (s.startswith("Failed.")), "the MP3 to be saved", 300)
+    t = wait_text(lambda s: s.startswith("Saved: clip.mp3") or (s.startswith("Failed.")), "the MP3 to be saved", 300, scroll=True)
     shot("mp3-saved")
     ls = files()
     print("Download/Smart Downloader:\n" + ls)
