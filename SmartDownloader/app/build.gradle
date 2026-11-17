@@ -1,0 +1,60 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Smart Downloader by Waqas (Blind World Hub): saves videos and audio from YouTube and other sites, made for screen
+// reader users and for everyone else. yt-dlp (with Python, QuickJS and FFmpeg) comes from youtubedl-android.
+// The build is signed afterwards by the workflow, with the key kept in the repository's secrets.
+// The phones it is for: Android 8 and newer, 32-bit and 64-bit ARM. The x86 parts go only into the emulator test build.
+def withX86 = project.hasProperty('withX86')
+def ytdl = '0.18.1'
+
+android {
+    namespace 'com.blindworldhub.smartdownloader'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.blindworldhub.smartdownloader'
+        minSdk 26          // Android 8.0
+        targetSdk 36       // Android 16 (runs on newer Android as well)
+        versionCode 1
+        versionName '1.0'
+        ndk {
+            if (withX86) abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
+            else abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packaging {
+        jniLibs {
+            // yt-dlp runs Python, FFmpeg and QuickJS as programs, so they must be unpacked on the phone
+            useLegacyPackaging true
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation "io.github.junkfood02.youtubedl-android:library:$ytdl"
+    implementation "io.github.junkfood02.youtubedl-android:ffmpeg:$ytdl"
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
+    implementation 'androidx.core:core:1.13.1'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}

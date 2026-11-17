@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#FF0B5CAD</color>
+    <color name="primaryDark">#FF083F78</color>
+    <color name="accent">#FFE8580C</color>
+    <color name="page">#FFF3F6FA</color>
+    <color name="card">#FFFFFFFF</color>
+    <color name="text">#FF14202E</color>
+    <color name="muted">#FF4A5A6C</color>
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/primary</item>
+        <item name="android:colorPrimaryDark">@color/primaryDark</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/page</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/muted</item>
+    </style>
+</resources>
