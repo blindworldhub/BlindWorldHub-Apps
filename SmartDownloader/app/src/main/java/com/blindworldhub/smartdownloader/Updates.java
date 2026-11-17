@@ -6,38 +6,24 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.pm.PackageInfo;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
-import androidx.core.content.FileProvider;
 
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.security.MessageDigest;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * New versions of Smart Downloader. The Blind World Hub server is asked first (the owner publishes there from his
- * admin page), and the website when the server does not answer. Update downloads the new version inside the app,
- * checks it is whole and signed by the same key as this app, and only then opens Android's installer.
+ * admin page), and the website when the server does not answer. Update opens the new version in the browser.
  */
 final class Updates {
     private Updates() { }
@@ -148,7 +134,7 @@ final class Updates {
         StringBuilder msg = new StringBuilder();
         if (u.whatsNew != null && u.whatsNew.trim().length() > 0) msg.append("What's new:\n").append(u.whatsNew.trim()).append("\n\n");
         if (u.size > 0) msg.append("Size: ").append(Math.max(1, Math.round(u.size / (1024.0 * 1024.0)))).append(" MB. ");
-        msg.append("Press Update: the new version is downloaded, checked to be from Blind World Hub, and then Android asks you to install it. Your downloads are kept.");
+        msg.append("Press Update: the new version downloads in your browser; then open the downloaded file to install it. Your downloads are kept.");
         AlertDialog.Builder b = new AlertDialog.Builder(a)
                 .setTitle("Smart Downloader " + u.version + " is available")
                 .setMessage(msg.toString())
@@ -162,120 +148,17 @@ final class Updates {
         b.show();
     }
 
-    private static File apkFile(Context c) {
-        return new File(new File(c.getCacheDir(), "update"), "SmartDownloader-update.apk");
-    }
-
-    private static void download(final Activity a, final Update u) {
-        if (Build.VERSION.SDK_INT >= 26 && !a.getPackageManager().canRequestPackageInstalls()) {
-            toast(a, "Allow Smart Downloader to install apps, then press Update again.");
-            try {
-                a.startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.getPackageName())));
-            } catch (Throwable t) {
-                try { a.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u.url))); } catch (Throwable ignored) { }
-            }
-            return;
-        }
-        toast(a, "Downloading the new version...");
-        new Thread(new Runnable() {
-            @Override public void run() {
-                String problem = null;
-                File f = apkFile(a);
-                try {
-                    f.getParentFile().mkdirs();
-                    save(u.url, f);
-                    if (u.sha256 != null && u.sha256.length() == 64 && !u.sha256.equalsIgnoreCase(sha256(f))) problem = "fingerprint";
-                    else if (!sameSigner(a, f)) problem = "signer";
-                } catch (Throwable t) {
-                    problem = "download: " + t.getMessage();
-                }
-                final String p = problem;
-                AppLog.info(a, "Update", "version " + u.version + ": " + (p == null ? "downloaded and checked" : p));
-                MAIN.post(new Runnable() {
-                    @Override public void run() {
-                        if (p == null) install(a);
-                        else if (p.startsWith("download")) toast(a, "The download failed. Please try again.");
-                        else { apkFile(a).delete(); toast(a, "The downloaded file is not from Blind World Hub, so it was not installed."); }
-                    }
-                });
-            }
-        }, "update-download").start();
-    }
-
-    private static void install(Activity a) {
+    /**
+     * The new version is opened in the browser, which downloads it; the person then opens the downloaded file and
+     * Android installs it. The app never installs anything itself (Play Protect blocks apps that do).
+     */
+    private static void download(Activity a, Update u) {
         try {
-            Uri uri = FileProvider.getUriForFile(a, a.getPackageName() + ".files", apkFile(a));
-            a.startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK));
+            a.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            toast(a, "The new version is downloading in your browser. When it is finished, open the downloaded file to install it.");
         } catch (Throwable t) {
-            AppLog.error(a, "Update", "the installer did not open", t);
-            toast(a, "The installer did not open. Please try again.");
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    static boolean sameSigner(Context c, File apk) {
-        try {
-            PackageManager pm = c.getPackageManager();
-            PackageInfo other = pm.getPackageArchiveInfo(apk.getPath(), PackageManager.GET_SIGNATURES);
-            PackageInfo me = pm.getPackageInfo(c.getPackageName(), PackageManager.GET_SIGNATURES);
-            if (other == null || !c.getPackageName().equals(other.packageName)) return false;
-            Set<String> a = prints(other.signatures), b = prints(me.signatures);
-            if (Build.VERSION.SDK_INT >= 28 && a.isEmpty()) {
-                PackageInfo o2 = pm.getPackageArchiveInfo(apk.getPath(), PackageManager.GET_SIGNING_CERTIFICATES);
-                PackageInfo m2 = pm.getPackageInfo(c.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES);
-                if (o2 != null && o2.signingInfo != null && m2.signingInfo != null) {
-                    a = prints(o2.signingInfo.getApkContentsSigners());
-                    b = prints(m2.signingInfo.getApkContentsSigners());
-                }
-            }
-            return !a.isEmpty() && a.equals(b);
-        } catch (Throwable t) {
-            AppLog.error(c, "Update", "could not read the new version's signature", t);
-            return false;
-        }
-    }
-
-    private static Set<String> prints(Signature[] sigs) throws Exception {
-        Set<String> out = new HashSet<String>();
-        if (sigs == null) return out;
-        for (Signature s : sigs) out.add(Arrays.toString(MessageDigest.getInstance("SHA-256").digest(s.toByteArray())));
-        return out;
-    }
-
-    static String sha256(File f) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        InputStream in = new FileInputStream(f);
-        try {
-            byte[] buf = new byte[65536];
-            int n;
-            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
-        } finally {
-            in.close();
-        }
-        StringBuilder sb = new StringBuilder();
-        for (byte x : md.digest()) sb.append(String.format("%02x", x));
-        return sb.toString();
-    }
-
-    private static void save(String url, File to) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-        conn.setConnectTimeout(20000);
-        conn.setReadTimeout(60000);
-        conn.setRequestProperty("User-Agent", Server.UA);
-        conn.setInstanceFollowRedirects(true);
-        InputStream in = null;
-        FileOutputStream out = new FileOutputStream(to);
-        try {
-            if (conn.getResponseCode() != 200) throw new Exception("http " + conn.getResponseCode());
-            in = conn.getInputStream();
-            byte[] buf = new byte[65536];
-            int n;
-            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-        } finally {
-            out.close();
-            try { if (in != null) in.close(); } catch (Exception ignored) { }
-            conn.disconnect();
+            AppLog.error(a, "Update", "the browser did not open", t);
+            toast(a, "No browser opened. Please download the new version from the Blind World Hub website.");
         }
     }
 
