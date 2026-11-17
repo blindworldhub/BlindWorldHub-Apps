@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -50,6 +50,7 @@ jobs:
           if [ -n "$SD_KEYSTORE_B64" ] && [ -n "$SD_STORE_PASSWORD" ] && [ -n "$SD_KEY_ALIAS" ]; then
             echo "$SD_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/key.jks"
             NAME="Smart Downloader.apk"
+            echo "SIGNED=1" >> "$GITHUB_ENV"
             echo "Signing with the Smart Downloader key from the secrets."
           else
             export SD_STORE_PASSWORD="test-only-$GITHUB_RUN_ID" SD_KEY_ALIAS=test
@@ -74,6 +75,15 @@ jobs:
           done
           if unzip -l "out/$NAME" | grep -q "lib/x86"; then echo "x86 parts left in the phone copy"; exit 1; fi
           ls -la out test
+      - name: Publish on the Releases page (a pre-release, only when signed with the real key)
+        if: env.SIGNED == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(grep -oP "versionName '\K[^']+" SmartDownloader/app/build.gradle)
+          TAG="smart-downloader-$V-build$GITHUB_RUN_NUMBER"
+          gh release create "$TAG" "out/Smart Downloader.apk" --repo "$GITHUB_REPOSITORY" --prerelease \
+            --title "Smart Downloader $V (build $GITHUB_RUN_NUMBER)" --notes "Built from $GITHUB_SHA."
       - uses: actions/upload-artifact@v5
         with:
           name: smart-downloader-apk
