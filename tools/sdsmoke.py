@@ -144,9 +144,10 @@ def main():
 
     # 1. video
     share(CLIP)
-    t = wait_text(lambda s: s.startswith("Found.") or "did not work" in s or "not supported" in s, "the clip to be found", 180)
+    t = wait_text(lambda s: s.startswith("Found.") or s == "Video file type" or s == "Audio file type" or "did not work" in s
+                  or "not supported" in s, "the clip to be found", 180)
     shot("found")
-    if not t or not t.startswith("Found."):
+    if not t or not (t.startswith("Found.") or t.endswith("file type")):
         fails.append("the clip was not found: %s" % t)
         return
     tap(lambda n: n.get("text") == "Video" and n.get("class", "").endswith("RadioButton"), "the Video choice")
@@ -199,7 +200,7 @@ def main():
     for _ in range(4):
         swipe(up=False)
     share("https://www.youtube.com/watch?v=jNQXAC9IVRw")
-    t = wait_text(lambda s: s.startswith("Found.") or "robot" in s or "did not work" in s or "refused" in s or "not available" in s,
+    t = wait_text(lambda s: s.startswith("Found.") or s.endswith("file type") or "robot" in s or "did not work" in s or "refused" in s or "not available" in s,
                   "YouTube", 180)
     shot("youtube")
     print("YOUTUBE RESULT (not a failure if blocked):", t)
