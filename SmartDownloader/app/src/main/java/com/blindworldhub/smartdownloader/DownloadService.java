@@ -419,6 +419,10 @@ public final class DownloadService extends Service {
             String n = f.getName().toLowerCase(Locale.US);
             if (f.isDirectory() || n.endsWith(".part") || n.endsWith(".ytdl") || n.endsWith(".temp") || n.contains(".part-frag")
                     || n.endsWith(".jpg") || n.endsWith(".webp") || n.endsWith(".png")) continue;
+            if (j.choice.startsWith("3GP") && n.endsWith(".mov")) {
+                File g = new File(f.getParentFile(), f.getName().substring(0, f.getName().length() - 4) + ".3gp");
+                if (f.renameTo(g)) f = g;
+            }
             try {
                 Saver.Saved s = Saver.save(this, f, sub);
                 j.saved.add(s);

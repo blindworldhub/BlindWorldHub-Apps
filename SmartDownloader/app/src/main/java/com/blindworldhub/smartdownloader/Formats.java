@@ -158,8 +158,10 @@ final class Formats {
         long bytes = duration > 0 ? duration * (h <= 144 ? 160 : h <= 240 ? 300 : 500) * 125L : 0;
         return new Option("3GP", "" + h, what + about(bytes) + ", sound 64 kbps (made on the phone, slower)", false, bytes,
                 "-f", "bv*[height<=" + h + "]+ba/b[height<=" + h + "]/wv*+ba/w",
-                "--recode-video", "3gp",
-                "--postprocessor-args", "VideoConvertor:-c:v mpeg4 -q:v 5 -c:a aac -b:a 64k -ac 2 -ar 44100");
+                // yt-dlp cannot make 3GP by name: it makes a MOV file whose inside is 3GP (-f 3gp), and the app
+                // gives it the .3gp name when it saves it (DownloadService)
+                "--recode-video", "mov",
+                "--postprocessor-args", "VideoConvertor:-c:v mpeg4 -q:v 5 -c:a aac -b:a 64k -ac 2 -ar 44100 -f 3gp");
     }
 
     private static void addAudioChoices(Media m, Facts f, long duration) {
@@ -192,8 +194,11 @@ final class Formats {
         for (int k : KBPS) {
             String q = k >= 320 ? " (best)" : k == 128 ? " (good, smaller file)" : k <= 48 ? " (smallest file, for speech)" : "";
             long bytes = duration * k * 125L;
-            list.add(new Option(t, "" + k, k + " kbps" + q + about(bytes), true, bytes,
-                    "-f", from, "-x", "--audio-format", fmt, "--audio-quality", k + "K", "--embed-metadata"));
+            List<String> a = new ArrayList<String>(Arrays.asList("-f", from, "-x", "--audio-format", fmt, "--audio-quality", k + "K", "--embed-metadata"));
+            // FFmpeg in the app has its own OPUS and OGG (Vorbis) makers, not the outside ones yt-dlp asks for by name
+            if ("OPUS".equals(t)) a.addAll(Arrays.asList("--postprocessor-args", "ExtractAudio:-c:a opus -strict -2 -ar 48000 -b:a " + k + "k"));
+            if ("OGG".equals(t)) a.addAll(Arrays.asList("--postprocessor-args", "ExtractAudio:-c:a vorbis -strict -2 -ac 2 -b:a " + k + "k"));
+            list.add(new Option(t, "" + k, k + " kbps" + q + about(bytes), true, bytes, a.toArray(new String[0])));
         }
         return list;
     }

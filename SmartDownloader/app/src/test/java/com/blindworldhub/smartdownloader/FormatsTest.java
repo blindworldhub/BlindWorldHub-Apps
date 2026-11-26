@@ -48,7 +48,9 @@ public class FormatsTest {
         assertTrue(m.video.get("MKV").get(0).args.contains("mkv"));
         // 3GP: only 360p or smaller
         assertEquals(1, m.video.get("3GP").size());
-        assertTrue(m.video.get("3GP").get(0).args.contains("3gp"));
+        assertTrue(m.video.get("3GP").get(0).args.contains("mov"));
+        assertTrue(m.video.get("3GP").get(0).args.get(m.video.get("3GP").get(0).args.size() - 1).endsWith("-f 3gp"));
+        assertTrue(m.audio.get("OPUS").get(1).args.contains("ExtractAudio:-c:a opus -strict -2 -ar 48000 -b:a 320k"));
         assertEquals("2 minutes 5 seconds", Formats.duration(m.duration));
     }
 
