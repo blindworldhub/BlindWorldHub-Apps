@@ -31,7 +31,16 @@ final class Saver {
     static final class Saved {
         final Uri uri;
         final String name, where, mime;
-        Saved(Uri uri, String name, String where, String mime) { this.uri = uri; this.name = name; this.where = where; this.mime = mime; }
+        final String path;          // Android 8 and 9: the file itself (null on newer Android)
+        Saved(Uri uri, String name, String where, String mime, String path) {
+            this.uri = uri; this.name = name; this.where = where; this.mime = mime; this.path = path;
+        }
+        boolean isSubtitle() { return isSubtitleName(name); }
+    }
+
+    static boolean isSubtitleName(String name) {
+        String n = name.toLowerCase(Locale.US);
+        return n.endsWith(".srt") || n.endsWith(".vtt") || n.endsWith(".ass");
     }
 
     static Saved save(Context c, File f, String subFolder) throws Exception {
@@ -57,7 +66,7 @@ final class Saver {
                 try { cr.delete(uri, null, null); } catch (Throwable ignored) { }
                 throw e;
             }
-            return new Saved(uri, f.getName(), rel, mime);
+            return new Saved(uri, f.getName(), rel, mime, null);
         }
         File dir = new File(Environment.getExternalStorageDirectory(), rel);
         if (!dir.isDirectory() && !dir.mkdirs()) throw new Exception("could not make the folder " + dir);
@@ -65,7 +74,7 @@ final class Saver {
         if (!f.renameTo(to)) copy(new FileInputStream(f), new FileOutputStream(to));
         MediaScannerConnection.scanFile(c, new String[] { to.getAbsolutePath() }, new String[] { mime }, null);
         Uri uri = FileProvider.getUriForFile(c, c.getPackageName() + ".files", to);
-        return new Saved(uri, to.getName(), rel, mime);
+        return new Saved(uri, to.getName(), rel, mime, to.getAbsolutePath());
     }
 
     private static File unique(File dir, String name) {
@@ -101,7 +110,47 @@ final class Saver {
         if (n.endsWith(".opus") || n.endsWith(".ogg")) return "audio/ogg";
         if (n.endsWith(".aac")) return "audio/aac";
         if (n.endsWith(".wav")) return "audio/wav";
+        if (n.endsWith(".flac")) return "audio/flac";
+        if (n.endsWith(".3gp")) return "video/3gpp";
+        if (n.endsWith(".srt")) return "application/x-subrip";
+        if (n.endsWith(".vtt")) return "text/vtt";
         return "application/octet-stream";
+    }
+
+    /**
+     * Gives a saved file a new name (the person's words, the file type kept). Returns the file with its new name,
+     * or throws with a reason.
+     */
+    static Saved rename(Context c, Saved s, String wanted) throws Exception {
+        int dot = s.name.lastIndexOf('.');
+        String ext = dot > 0 ? s.name.substring(dot) : "";
+        String base = wanted == null ? "" : wanted.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", " ").replaceAll("\\s+", " ").trim();
+        if (base.toLowerCase(Locale.US).endsWith(ext.toLowerCase(Locale.US)) && ext.length() > 0) base = base.substring(0, base.length() - ext.length()).trim();
+        while (base.startsWith(".")) base = base.substring(1).trim();
+        if (base.length() == 0) throw new Exception("Please write a name.");
+        if (base.length() > 150) base = base.substring(0, 150).trim();
+        String name = base + ext;
+        if (name.equals(s.name)) return s;
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues v = new ContentValues();
+            v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+            if (c.getContentResolver().update(s.uri, v, null, null) < 1) throw new Exception("The file could not be renamed. Was it deleted or moved?");
+            String now = name;
+            try {
+                android.database.Cursor cur = c.getContentResolver().query(s.uri, new String[] { MediaStore.MediaColumns.DISPLAY_NAME }, null, null, null);
+                if (cur != null) { try { if (cur.moveToFirst()) now = cur.getString(0); } finally { cur.close(); } }
+            } catch (Throwable ignored) { }
+            return new Saved(s.uri, now, s.where, s.mime, null);
+        }
+        if (s.path == null) throw new Exception("The file could not be renamed.");
+        File from = new File(s.path);
+        if (!from.exists()) throw new Exception("The file is not there any more. Was it deleted or moved?");
+        File to = new File(from.getParentFile(), name);
+        if (to.exists()) throw new Exception("A file with this name is already there. Please choose another name.");
+        if (!from.renameTo(to)) throw new Exception("The file could not be renamed.");
+        MediaScannerConnection.scanFile(c, new String[] { from.getAbsolutePath(), to.getAbsolutePath() }, null, null);
+        Uri uri = FileProvider.getUriForFile(c, c.getPackageName() + ".files", to);
+        return new Saved(uri, to.getName(), s.where, s.mime, to.getAbsolutePath());
     }
 
     /** A folder name that every phone accepts. */

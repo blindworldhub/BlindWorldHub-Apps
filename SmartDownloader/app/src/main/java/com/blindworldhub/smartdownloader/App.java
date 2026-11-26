@@ -2,7 +2,10 @@ package com.blindworldhub.smartdownloader;
 
 import android.app.Application;
 
-/** Starts getting the download engine ready as soon as the app runs, and keeps a note of crashes for reports. */
+/**
+ * Reads the kept list of downloads, starts getting the download engine ready as soon as the app runs, and keeps a
+ * note of crashes for reports.
+ */
 public final class App extends Application {
     @Override
     public void onCreate() {
@@ -14,6 +17,7 @@ public final class App extends Application {
                 if (old != null) old.uncaughtException(t, e);
             }
         });
+        DownloadService.load(this);
         DownloadService.channels(this);
         Engine.start(this);
     }

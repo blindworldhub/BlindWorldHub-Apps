@@ -2,7 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
-// Smart Downloader by Waqas (Blind World Hub): saves videos and audio from YouTube and other sites, made for screen
+// Smart Downloader (developer: Blind World Hub by Muhammad Waqas): saves videos and audio from YouTube, TikTok,
+// Instagram, Facebook and other sites, made for screen
 // reader users and for everyone else. yt-dlp (with Python, QuickJS and FFmpeg) comes from youtubedl-android.
 // The build is signed afterwards by the workflow, with the key kept in the repository's secrets.
 // The phones it is for: Android 8 and newer, 32-bit and 64-bit ARM. The x86 parts go only into the emulator test build.

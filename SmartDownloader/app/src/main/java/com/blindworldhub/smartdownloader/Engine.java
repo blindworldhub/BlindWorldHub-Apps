@@ -122,8 +122,9 @@ final class Engine {
     }
 
     /** Facts about a link (yt-dlp's JSON). Runs on a background thread. */
-    static String info(String url, boolean playlist) throws Exception {
+    static String info(Context c, String url, boolean playlist) throws Exception {
         YoutubeDLRequest r = new YoutubeDLRequest(url);
+        Login.addCookies(c, r, url);
         r.addOption("--dump-single-json");
         r.addOption("--no-warnings");
         r.addOption("--socket-timeout", "30");
@@ -137,6 +138,21 @@ final class Engine {
         try {
             YoutubeDLResponse res = YoutubeDL.getInstance().execute(r, null, false, null);
             return res.getOut();
+        } finally {
+            LOCK.readLock().unlock();
+        }
+    }
+
+    /** A YouTube search: the first results (yt-dlp's JSON). Runs on a background thread. */
+    static String search(String words, int count) throws Exception {
+        YoutubeDLRequest r = new YoutubeDLRequest("ytsearch" + count + ":" + words);
+        r.addOption("--flat-playlist");
+        r.addOption("--dump-single-json");
+        r.addOption("--no-warnings");
+        r.addOption("--socket-timeout", "30");
+        LOCK.readLock().lock();
+        try {
+            return YoutubeDL.getInstance().execute(r, null, false, null).getOut();
         } finally {
             LOCK.readLock().unlock();
         }
@@ -169,6 +185,11 @@ final class Engine {
         String low = e.toLowerCase();
         if (low.contains("sign in to confirm") || low.contains("not a bot"))
             return "YouTube asked to confirm that this is not a robot. Wait a few minutes, or change between Wi-Fi and mobile data, and try again.";
+        if (low.contains("login required") || low.contains("log in") || low.contains("logged-in") || low.contains("use --cookies")
+                || low.contains("--cookies-from-browser") || low.contains("rate-limit reached") || low.contains("requested content is not available")
+                || low.contains("cannot parse data"))
+            return "This site asked to sign in to show this video. If it is a public video, wait a little and try again. "
+                    + "For Instagram and Facebook you can also sign in: press Menu, then Sign in to Instagram or Sign in to Facebook, and try again.";
         if (low.contains("private video")) return "This video is private, so it cannot be downloaded.";
         if (low.contains("members-only") || low.contains("join this channel")) return "This video is only for the channel's members.";
         if (low.contains("age") && low.contains("confirm your age")) return "YouTube allows this video only to signed-in adults, so it cannot be downloaded here.";

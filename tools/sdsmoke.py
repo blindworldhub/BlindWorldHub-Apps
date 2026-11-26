@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Uses Smart Downloader on an Android emulator like a person would: waits until the engine is ready, shares a
 video link to the app, downloads it as video (MP4) and as MP3 audio, and checks the files in Download/Smart
-Downloader. Then tries a YouTube link (only reported: YouTube often blocks cloud computers).
+Downloader; then every other file type (M4A, AAC, OPUS, OGG, WAV, FLAC, MKV, 3GP). Then tries a YouTube link (only reported: YouTube often blocks cloud computers).
 
 Usage: sdsmoke.py APK OUTDIR API"""
 import os
@@ -162,7 +162,8 @@ def main():
     for _ in range(4):
         swipe(up=False)
     tap(lambda n: n.get("text") == "Audio" and n.get("class", "").endswith("RadioButton"), "the Audio choice")
-    tap(lambda n: n.get("text", "").startswith("MP3 audio, 192 kbps"), "MP3 192 kbps")
+    tap(lambda n: n.get("text", "").startswith("MP3") and n.get("class", "").endswith("RadioButton"), "the MP3 file type")
+    tap(lambda n: n.get("text", "").startswith("192 kbps"), "MP3 192 kbps")
     tap(lambda n: n.get("text") == "Download" and n.get("class", "").endswith("Button"), "the Download button (audio)")
     t = wait_text(lambda s: s.startswith("Saved: clip.mp3") or (s.startswith("Failed.")), "the MP3 to be saved", 300, scroll=True)
     shot("mp3-saved")
@@ -171,7 +172,30 @@ def main():
     if not t or "clip.mp3" not in ls:
         fails.append("the MP3 was not saved: %s" % t)
 
-    # 3. YouTube (reported only)
+    # 3. every other file type, one after the other: each must give its file
+    for kind, typ, exts in [("Audio", "M4A", ["m4a"]), ("Audio", "AAC", ["aac", "m4a"]), ("Audio", "OPUS", ["opus"]),
+                            ("Audio", "OGG", ["ogg"]), ("Audio", "WAV", ["wav"]), ("Audio", "FLAC", ["flac"]),
+                            ("Video", "MKV", ["mkv"]), ("Video", "3GP", ["3gp"])]:
+        before = set(files().split("\n"))
+        for _ in range(4):
+            swipe(up=False)
+        tap(lambda n: n.get("text") == kind and n.get("class", "").endswith("RadioButton"), "the %s choice" % kind)
+        tap(lambda n: (n.get("text", "") == typ or n.get("text", "").startswith(typ + " ")) and n.get("class", "").endswith("RadioButton"),
+            "the %s file type" % typ)
+        tap(lambda n: n.get("text") == "Download" and n.get("class", "").endswith("Button"), "the Download button (%s)" % typ)
+        got = None
+        end = time.time() + 240
+        while time.time() < end and not got:
+            for line in files().split("\n"):
+                if line not in before and any(line.strip().endswith("." + e) for e in exts):
+                    got = line.strip()
+            time.sleep(4)
+        shot("type-" + typ.lower())
+        print("%s %s: %s" % (kind, typ, got or "NOT SAVED"))
+        if not got:
+            fails.append("%s %s was not saved" % (kind, typ))
+
+    # 4. YouTube (reported only)
     for _ in range(4):
         swipe(up=False)
     share("https://www.youtube.com/watch?v=jNQXAC9IVRw")
