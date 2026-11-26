@@ -15,7 +15,7 @@ import java.util.TreeMap;
 /**
  * Turns yt-dlp's facts about a link into the choices the person sees. Video: the file type (MP4, MKV, WEBM, 3GP)
  * and then the quality (each resolution with its size and the sound's kbps). Audio: the file type (MP3, M4A, AAC,
- * OPUS, OGG, WAV, FLAC) and then the quality in kbps (48 to 320) with the size. Every choice carries the yt-dlp
+ * OPUS, OGG, WAV, FLAC) and then the quality in kbps (48 to 320; OGG one good quality) with the size. Every choice carries the yt-dlp
  * options it needs.
  */
 final class Formats {
@@ -179,6 +179,14 @@ final class Formats {
                     "-f", "ba/b", "-x", "--audio-format", fmt, "--embed-metadata"));
             return list;
         }
+        if ("OGG".equals(t)) {
+            // FFmpeg's own OGG (Vorbis) maker does not follow a kbps; it makes a good quality, about 100 kbps
+            long bytes = duration * 100 * 125L;
+            list.add(new Option(t, "good", "Good quality" + about(bytes), true, bytes,
+                    "-f", "ba/b", "-x", "--audio-format", fmt, "--embed-metadata",
+                    "--postprocessor-args", "ExtractAudio:-c:a vorbis -strict -2 -ac 2 -q:a 6"));
+            return list;
+        }
         if ("M4A".equals(t) && (f == null || f.m4a > 0)) {
             list.add(new Option(t, "original", "Original quality, as it comes" + (f != null && f.m4aKbps > 0 ? ", " + f.m4aKbps + " kbps" : "")
                     + about(f == null ? 0 : f.m4a) + " (fastest)", true, f == null ? 0 : f.m4a,
@@ -197,7 +205,6 @@ final class Formats {
             List<String> a = new ArrayList<String>(Arrays.asList("-f", from, "-x", "--audio-format", fmt, "--audio-quality", k + "K", "--embed-metadata"));
             // FFmpeg in the app has its own OPUS and OGG (Vorbis) makers, not the outside ones yt-dlp asks for by name
             if ("OPUS".equals(t)) a.addAll(Arrays.asList("--postprocessor-args", "ExtractAudio:-c:a opus -strict -2 -ar 48000 -b:a " + k + "k"));
-            if ("OGG".equals(t)) a.addAll(Arrays.asList("--postprocessor-args", "ExtractAudio:-c:a vorbis -strict -2 -ac 2 -b:a " + k + "k"));
             list.add(new Option(t, "" + k, k + " kbps" + q + about(bytes), true, bytes, a.toArray(new String[0])));
         }
         return list;
